@@ -125,43 +125,78 @@ export default function NewJournalPage() {
 
   const handleSubmit = async () => {
     if (!audioBlob || !user) return
-
+  
     setIsSubmitting(true)
-
+  
     try {
       // 1. Upload audio to Supabase Storage
       const fileName = `${user.id}/${Date.now()}.webm`
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('audio-journals')
         .upload(fileName, audioBlob)
-
+  
       if (uploadError) throw uploadError
-
+  
       // 2. Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('audio-journals')
         .getPublicUrl(fileName)
-
-      // 3. Create journal entry in database (without AI processing for now)
+  
+      // 3. Transcribe audio using Whisper API
+      const formData = new FormData()
+      formData.append('audio', audioBlob, 'recording.webm')
+  
+      const transcribeResponse = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      })
+  
+      if (!transcribeResponse.ok) {
+        throw new Error('Transcription failed')
+      }
+  
+      const { transcript } = await transcribeResponse.json()
+      console.log('Transcript:', transcript)
+  
+      // 4. Extract insights using Claude API
+      const extractResponse = await fetch('/api/extract-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript }),
+      })
+  
+      if (!extractResponse.ok) {
+        throw new Error('Insight extraction failed')
+      }
+  
+      const { extracted } = await extractResponse.json()
+      console.log('Extracted insights:', extracted)
+  
+      // 5. Create journal entry in database with AI insights
       const { data: journalData, error: journalError } = await supabase
         .from('journals')
         .insert({
           user_id: user.id,
           audio_url: publicUrl,
           audio_duration_seconds: duration,
-          transcript: null, // We'll add AI processing later
-          energy_level: null,
-          difficulty_rating: null,
-          mood: null,
-          extracted_data: null,
-          tags: null,
+          transcript: transcript,
+          energy_level: extracted.energy_level,
+          difficulty_rating: extracted.difficulty_rating,
+          mood: extracted.mood,
+          extracted_data: {
+            highlights: extracted.highlights,
+            challenges: extracted.challenges,
+            body_feelings: extracted.body_feelings,
+            instructor_feedback: extracted.instructor_feedback,
+          },
+          tags: extracted.tags,
         })
         .select()
         .single()
-
+  
       if (journalError) throw journalError
-
-      alert('Journal saved successfully! 🎉')
+  
+      alert('Journal saved with AI insights! 🎉')
       router.push('/dashboard')
     } catch (error: any) {
       console.error('Error submitting journal:', error)
