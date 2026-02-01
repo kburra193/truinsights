@@ -146,7 +146,7 @@ export default function NewJournalPage() {
       const formData = new FormData()
       formData.append('audio', audioBlob, 'recording.webm')
   
-      const transcribeResponse = await fetch('/api/transcribe', {
+      const transcribeResponse = await fetch('/api/transcribe-mock', {
         method: 'POST',
         body: formData,
       })
@@ -159,7 +159,7 @@ export default function NewJournalPage() {
       console.log('Transcript:', transcript)
   
       // 4. Extract insights using Claude API
-      const extractResponse = await fetch('/api/extract-insights', {
+      const extractResponse = await fetch('/api/extract-insights-mock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcript }),
